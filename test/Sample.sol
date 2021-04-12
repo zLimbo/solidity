@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0 
 pragma solidity >=0.4.16 <0.9.0; // 编译指令，指明solidity版本，上面一行是自由软件许可证
 
-contract Sample{   // 合约
+contract Sample {   // 合约
 
     //State variables, 状态变量，存储于以太坊区块链中
     address private _admin;  
