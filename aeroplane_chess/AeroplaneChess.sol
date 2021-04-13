@@ -1,59 +1,125 @@
-from web3 import Web3
-import os
+// SPDX-License-Identifier: GPL-3.0 
+pragma solidity >=0.4.16 <0.9.0; // 编译指令，指明solidity版本，上面一行是自由软件许可证
 
-# ganache 默认rpc url和端口
-url = 'http://localhost:7545'
-w3 = Web3(Web3.HTTPProvider(url))
-if not w3.isConnected():
-    raise Exception("Ethereum connection failed!")
-eth = w3.eth
-# 设置发送交易的账户
-eth.default_account = eth.accounts[0]
-print("Ethereum({}) connection successful!".format(url))
+// 合约
+contract AeroplaneChess {   
 
+    // 玩家结构体
+    struct Player {
+        address addr;   // 账户地址
+        string name;    // 玩家名称
+        uint position;  // 玩家当前位置
+        int direction;  // 方向
+        uint step;  // 当前轮走的步数
+        uint round; // 轮次，第几次走
+    }
 
-def read_file(file):
-    """
-        读取文件中的全部内容
-    """
-    with open(file, 'r') as f:
-        return f.read()
-
-
-def deploy(contract_name, *args):
-    """
-        部署合约
-    """
-    # 从文件中读取abi和bytecode
-    # 默认路径为 contract_name/contract_name.abi 和 contract_name/contract_name.bin
-    abi_file = contract_name + r'/' + contract_name + '.abi';
-    bytecode_file = contract_name + r'/' + contract_name + '.bin';
-    abi = read_file(abi_file)
-    bytecode = read_file(bytecode_file)
-    # 生成合约，调用其构造函数将其部署至以太坊上
-    contract = eth.contract(abi=abi, bytecode=bytecode)
-    tx_hash = contract.constructor(*args).transact()
-    # 获取交易回执，使用其中的合约地址定位已部署的合约
-    tx_receipt = eth.waitForTransactionReceipt(tx_hash)
-    deployed_contract = eth.contract(address=tx_receipt.contractAddress, abi=abi)
-    print("Contract '{}' was successfully deployed! Contract address: '{}'".
-            format(contract_name, tx_receipt.contractAddress))
-    return deployed_contract
-
-
-def compile(contract_name):
-    """
-        编译合约
-    """
-    cmd = 'solc --abi --bin --overwrite -o ' + contract_name + ' ' + contract_name + '.sol'
-    os.system(cmd)
-
-
-def compile_and_deploy(contract_name, *args):
-    """
-        编译合约并部署
-    """
-    compile(contract_name)
-    return deploy(contract_name, *args)
+    uint destination;   // 目的地，起点默认为 0
+    uint dice;          // 骰子
+    bool gameover;      // 游戏是否结束
+    uint winnerId;      // 赢家 id
+    uint num;   // 玩家数目
+    Player[] players;   // 玩家数组，存储所有玩家的状态数据
+    mapping(address => uint) playerId;  // 地址到id的映射
+    mapping(address => bool) isPlay;    // 判断某个地址（即账户）是否参与游戏
     
+    // 构造器
+    constructor(uint _destination, uint _dice) {
+        require(_destination > 0 && _dice > 0); // 检查机制，不符合就回退代码
+        destination = _destination;
+        dice = _dice;
+        num = 0;
+        gameover = false;
+    }
 
+    function isOver() public view returns (bool over) {
+        return gameover;
+    }
+
+    function getWinner() public view returns (Player memory) {
+        require(gameover);
+        return players[winnerId];
+    }
+
+    function getGameInfo() public view returns (uint, uint, bool, uint, uint) {
+        return (destination, dice, gameover, winnerId, num);
+    }
+
+    function getPlayers() public view returns (Player[] memory) {
+        return players;
+    }
+
+    // 获取当前以太坊账户的参与账号
+    function getPlayer() public view returns (Player memory) {
+        require(isPlay[msg.sender]);
+        uint id = playerId[msg.sender];
+        return players[id];
+    }
+
+    // 是否参加了游戏，遍历玩家数组
+    function isJoin() public view returns (bool) {
+        bool ret = false;
+        for (uint i = 0; i < num; ++i) {
+            if (players[i].addr == msg.sender) {
+                ret = true;
+                break;
+            }
+        }
+        return ret;
+    }
+
+    // 参加游戏
+    function join(string memory _name) public {
+        require(!isPlay[msg.sender]);
+        isPlay[msg.sender] = true;
+        // 数组添加一个用户, 后面四个数字依次为：初始位置，方向，当前骰子步数，轮次
+        players.push(Player(msg.sender, _name, 0, 1, 0, 0));   
+        playerId[msg.sender] = num;
+        num += 1;
+    }
+
+    // 随机骰子 [1, dice]
+    function randomDice(string memory _str) private view returns (uint) {
+        uint rand = uint(keccak256(abi.encodePacked(_str)));
+        return rand % uint(dice) + 1;
+    }
+
+    // 进行游戏，字符串作为随机值参数
+    function play(string memory _str) public {
+        require(isPlay[msg.sender]);
+        require(!gameover);
+
+        uint step = randomDice(_str);
+        uint id = playerId[msg.sender];
+        int newPosition = int(players[id].position) + players[id].direction * int(step);
+        
+        while (true) {
+            if (newPosition < 0) {
+                newPosition = -newPosition;
+                players[id].direction = 1;
+            } else if (uint(newPosition) > destination) {
+                newPosition = int(destination) * 2 - newPosition;
+                players[id].direction = -1;
+            } else {
+                break;
+            }
+        }
+        
+        players[id].position = uint(newPosition);
+        players[id].step = step;
+        players[id].round += 1;
+
+        if (uint(newPosition) == destination) {
+            // success
+            gameover = true;
+            winnerId = id;
+            return;
+        }
+
+        for (uint i = 0; i < num; ++i) {
+            if (i != id && players[i].position == uint(newPosition)) {
+                players[i].position = 0;
+            }
+        }
+    }
+}

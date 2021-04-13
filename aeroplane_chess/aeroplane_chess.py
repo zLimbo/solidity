@@ -4,7 +4,8 @@ import sys
 import getopt
 import uuid
 
-url = "http://localhost:7545"   # 以太坊测试链 rpc 连接端口
+# url = "http://localhost:7545"   # 以太坊测试链 rpc 连接端口
+url = "http://192.168.6.104:7545"
 contract_address_file = 'contract_address.txt'  # 合约地址保存文件
 abi_file = "AeroplaneChess/AeroplaneChess.abi"  # abi 文件
 bytecode_file = "AeroplaneChess/AeroplaneChess.bin"  # 字节码文件
